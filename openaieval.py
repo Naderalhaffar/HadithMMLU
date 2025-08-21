@@ -6,6 +6,8 @@ import re
 import unicodedata
 import pandas as pd
 import openai
+import matplotlib.pyplot as plt
+
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -154,5 +156,25 @@ def main():
     print("=" * 50)
     print(f"Detailed results saved to: {args.out}\n")
 
+    template_acc = res.groupby("template")["is_correct"].mean() * 100
+    template_acc.plot(kind="bar", color="skyblue", edgecolor="black")
+    plt.title("Accuracy by Template")
+    plt.ylabel("Accuracy (%)")
+    plt.xlabel("Template")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig("accuracy_by_template.png")
+    plt.show()
+
+    # Accuracy by language
+    lang_acc = res.groupby("lang")["is_correct"].mean() * 100
+    lang_acc.plot(kind="bar", color="lightgreen", edgecolor="black")
+    plt.title("Accuracy by Language")
+    plt.ylabel("Accuracy (%)")
+    plt.xlabel("Language")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig("accuracy_by_language.png")
+    plt.show()
 if __name__ == "__main__":
     main()
