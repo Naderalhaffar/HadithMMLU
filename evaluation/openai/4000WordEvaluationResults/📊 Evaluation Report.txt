@@ -1,0 +1,14 @@
+📊 Evaluation Report
+==================================================
+Overall Accuracy 67.45% (2698  4000)
+
+Accuracy by Template
+  Authenticity    68.30% (683  1000)
+  Chapter         81.40% (814  1000)
+  Cloze           67.90% (679  1000)
+  Source          52.20% (522  1000)
+
+Accuracy by Language
+  ar    67.45% (2698  4000)
+==================================================
+Detailed results saved to ~Desktophadith_eval_results4000.csv

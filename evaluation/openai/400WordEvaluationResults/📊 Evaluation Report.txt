@@ -1,0 +1,16 @@
+
+📊 Evaluation Report
+==================================================
+Overall Accuracy: 67.25% (269 / 400)
+
+Accuracy by Template:
+  Authenticity   : 63.00% (63 / 100)
+  Chapter        : 77.00% (77 / 100)
+  Cloze          : 73.00% (73 / 100)
+  Source         : 56.00% (56 / 100)
+
+Accuracy by Language:
+  ar   : 69.50% (139 / 200)
+  en   : 65.00% (130 / 200)
+==================================================
+Detailed results saved to: ~/Desktop/hadith_eval_results.csv
