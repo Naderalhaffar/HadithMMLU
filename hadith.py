@@ -31,6 +31,8 @@ GRADE_AR_MAP = {
     'Daif':  'ضعيف'
 }
 NOT_HADITH_AR = 'ليس حديثاً'
+AR_AUTH_QUESTION = "ما درجة صحة هذا الحديث"
+
 
 SOURCE_ALIASES = {
     # Bukhari
@@ -76,17 +78,13 @@ def source_to_ar(value: str) -> str:
     if not isinstance(value, str) or not value.strip():
         return 'هذا الكتاب'
     raw = value.strip()
-    # already Arabic?
     if raw in SRC_AR_MAP.values():
         return raw
-    # canonical English -> Arabic
     if raw in SRC_AR_MAP:
         return SRC_AR_MAP[raw]
-    # alias -> canonical -> Arabic
     alias = SOURCE_ALIASES.get(_norm_source_key(raw))
     if alias and alias in SRC_AR_MAP:
         return SRC_AR_MAP[alias]
-    # fallback: show what we got
     return raw
 
 
@@ -267,38 +265,43 @@ def gen_authenticity_en(auth_df, prov_df, n):
     half = n // 2
     has_collection = 'collection' in auth_df.columns
 
-    coll = r['collection'] if has_collection and isinstance(r['collection'], str) and r['collection'].strip() else 'this collection'
-    prompt = f"What is the authenticity grade of this hadith from {coll}?\n\n{snippet}"
+    def strip_n(txt): 
+        return re.sub(r'^[^,]+,\s*','', txt or '').strip()
 
-
-
-    def strip_n(txt): return re.sub(r'^[^,]+,\s*','', txt or '').strip()
+    # Prepare real hadith subset
+    auth_df = auth_df.copy()
     auth_df['core_en'] = auth_df['text_en'].apply(strip_n)
     auth_df['wc_en'] = auth_df['core_en'].str.split().apply(len)
     good = auth_df[auth_df['wc_en'] >= 10]
 
-    for _, r in good.sample(min(half, len(good))).iterrows():
-         snippet = ' '.join(r['core_en'].split()[:25])
-         coll = r['source'] if has_collection else 'this collection'
-         prompt = f"What is the authenticity grade of this hadith from {coll}?\n\n{snippet}"
-         qs.append({
-             'template':'Authenticity','lang':'en',
-             'prompt': prompt,
-             'choices': ['Sahih','Hasan','Daif','Not a Hadith'],
-             'answer': r['consensus_grade']
-         })
+    # Real hadiths → ask for Sahih/Hasan/Daif
+    for _, r in good.sample(min(half, len(good)), random_state=5).iterrows():
+        snippet = ' '.join(r['core_en'].split()[:25])
+        coll = (r['collection'].strip() if has_collection 
+                and isinstance(r.get('collection'), str) 
+                and r['collection'].strip() else 'this collection')
+        prompt = f"What is the authenticity grade of this hadith from {coll}?\n\n{snippet}"
+        qs.append({
+            'template': 'Authenticity', 'lang': 'en',
+            'prompt': prompt,
+            'choices': ['Sahih','Hasan','Daif','Not a Hadith'],
+            'answer': r['consensus_grade']
+        })
 
-    collections = [c for c in CANONICAL_EN]
+    collections = list(CANONICAL_EN)
+    prov_df = prov_df.copy()
     prov_df['wc_en'] = prov_df['text_en'].str.split().apply(len)
     pool = prov_df[prov_df['wc_en'] >= 10]
-    if len(pool) < (n-half): pool = prov_df
+    if len(pool) < (n - len(qs)):
+        pool = prov_df
 
-    for _, r in pool.sample(n-half, random_state=6).iterrows():
+    need = n - len(qs)
+    for _, r in pool.sample(min(need, len(pool)), random_state=6).iterrows():
         snippet = ' '.join(r['text_en'].split()[:25])
         fake_coll = random.choice(collections)
         prompt = f"What is the authenticity grade of this hadith from {fake_coll}?\n\n{snippet}"
         qs.append({
-            'template':'Authenticity','lang':'en',
+            'template': 'Authenticity', 'lang': 'en',
             'prompt': prompt,
             'choices': ['Sahih','Hasan','Daif','Not a Hadith'],
             'answer': 'Not a Hadith'
@@ -435,7 +438,8 @@ def gen_authenticity_ar(auth_df, prov_df, n):
             coll_ar = source_to_ar(r['collection'])
         else:
             coll_ar = 'هذا الكتاب'
-        prompt = f"ما الدرجة الغالبة لهذا الحديث في {coll_ar}؟\n\n{snippet}"
+        prompt = f"{AR_AUTH_QUESTION} في {coll_ar}؟\n\n{snippet}"
+
 
         ar_grade = GRADE_AR_MAP[r['grade_norm']]
         qs.append({
@@ -452,7 +456,8 @@ def gen_authenticity_ar(auth_df, prov_df, n):
     for _, r in pool.sample(n - half).iterrows():
         snippet = ' '.join(r['text_ar'].split()[:25])
         fake_coll_ar = random.choice(ar_collections)
-        prompt = f"ما درجة صحة هذا الحديث في {fake_coll_ar}?\n\n{snippet}"
+        prompt = f"{AR_AUTH_QUESTION} في {fake_coll_ar}؟\n\n{snippet}"
+
         qs.append({
             'template': 'Authenticity','lang':'ar',
             'prompt': prompt,
@@ -472,7 +477,6 @@ if __name__ == '__main__':
     auth_df = load_auth_csv(args.auth)
     prov_df = load_proverbs_csv(args.proverbs)
 
-    # filter out duplicates in source, chapter, hadith_no
     mask = df.groupby('text_en_norm')['source'].transform('nunique') == 1
     chap_mask = df.groupby('text_en_norm')['chapter'].transform('nunique') == 1
     num_mask = df.groupby('text_en_norm')['hadith_no'].transform('nunique') == 1
